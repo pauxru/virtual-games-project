@@ -1,0 +1,632 @@
+# Starting the browser and openning 3 tabs
+global browser
+
+
+def start_odibets():
+    try:
+        print("Please Wait. Launching Chrome")
+        global browser
+        options = webdriver.ChromeOptions()
+        options.page_load_strategy = 'normal'
+        prefs = {"profile.default_content_setting_values.notifications": 2,
+                 "credentials_enable_service": False,
+                 "profile.password_manager_enabled": False}
+        options.add_experimental_option("prefs", prefs)
+        # options.add_argument("start-maximized")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--headless")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        browser = webdriver.Chrome(options=options,
+                                   executable_path=r'C:\Program Files\Google\Chrome\Application\chromedriver.exe')
+        time.sleep(2)
+        browser.set_window_size(1000, 960)
+        print("Browser launched successfully")
+
+    except Exception as e:
+        print("Could not start Chrome: ", e)
+        # start_odibets()
+
+
+def launch():
+    # Open the first tab for the markets
+    browser.switch_to.window(browser.window_handles[0])
+    url = "https://odibets.com/league"
+    browser.get(url)
+
+    # Open a new window for results
+    browser.execute_script("window.open('');")
+    # Switch to the new window
+    browser.switch_to.window(browser.window_handles[1])
+    browser.get(url)
+    try:
+        browser.find_element_by_xpath('//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[1]/ul[2]/li[2]').click()
+    except:
+        launch()
+    # Open a new window for standings
+    browser.execute_script("window.open('');")
+    browser.switch_to.window(browser.window_handles[2])
+    browser.get(url)
+    try:
+        browser.find_element_by_xpath('//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[1]/ul[2]/li[3]/button').click()
+    except:
+        launch()
+
+start_odibets()
+time.sleep(4)
+launch()
+
+# ---------------------------------------------------------------------------
+
+# Variables x-paths used
+x12_xpath = '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[2]/div[1]/div/div/div[1]/div/button[1]'
+ggng_xpath = '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[2]/div[1]/div/div/div[1]/div/button[2]'
+uo15_xpath = '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[2]/div[1]/div/div/div[1]/div/button[3]'
+standings_xpath = '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[1]/ul[2]/li[3]/button'
+results_xpath = '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[1]/ul[2]/li[2]'
+
+
+# This is the functions that capture all the data and save them in pandas df
+tk1 = [] 
+tk2 = []
+tk3 = [] 
+tk4 = []
+def stats_capture():  # Capture all the data before a match
+    # HDW odds
+    helium.set_driver(browser)
+    home_teams = []
+    away_teams = []
+    global dct1
+    dct1 = {"Home team": [], "Away team": [], "1": [], "X": [], "2": [],
+            "Time": [], "Date": [], "GG": [], "NG": [],
+            "OV1.5": [], "UN1.5": [], "H standing": [], "A standing": [],
+            "H points": [], "A points": [], "H Form points": [], "A Form points": [], "H W": [], "H D": [],
+            "H L": [], "A W": [], "A D": [], "A L": []}
+
+    # This is for the remaining time
+    browser.switch_to.window(browser.window_handles[0])
+    rm1 = []
+    for rema in browser.find_elements_by_class_name("md"):
+        rema = int(rema.text.replace(":", ""))
+        rm1.append(rema)
+        
+    ind = []
+    def take_1x2():
+        # Click the 1X2 button to make sure we are picking the right table
+        browser.implicitly_wait(10)
+        try:
+            ele3 = browser.find_element(By.XPATH, x12_xpath)
+            helium.click(ele3)
+            time.sleep(1.2)
+            browser.implicitly_wait(10)
+        except NoSuchElementException:
+            browser.refresh()
+            time.sleep(2.8)
+            stats_capture()
+
+        page = browser.page_source
+        soup = BeautifulSoup(page, 'lxml')
+
+        try: # Look for if the matches are there (1X2) page
+            WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'event-t'))).text
+
+        except TimeoutException:
+            pass
+    #         while is_internet_available() is True:
+    #             break
+    #             stats_capture()
+    #             if len(df_stats) < 2:
+    #                 time.sleep(5)
+    #                 continue
+    #             else:
+    #                 return df_stats
+
+        table = soup.findAll("div", {"class": "event"})
+
+        
+        for matchday in table:  # For 1X2 odds
+            matchday = matchday.text
+            matchday = matchday.replace(" 1 ", "")
+            matchday = matchday.replace("X ", ",")
+            matchday1 = matchday.replace("2 ", ",")
+            for l, d in enumerate(matchday1):
+                odds = []
+                if d.isdigit():
+                    matchday2 = matchday1[l:]
+                    matchday3 = matchday1[:l]
+                    break
+
+            odds = matchday2.split(",")
+            h_odd = odds[0]
+            d_odd = odds[1]
+            a_odd = odds[2]
+
+            teams = matchday3.strip().split("—")
+            h_team = teams[0].strip()
+            home_teams.append(h_team)
+            a_team = teams[1].strip()
+            away_teams.append(a_team)
+
+            try:
+                dct1["Home team"].append(h_team)
+                dct1["Away team"].append(a_team)
+                dct1["1"].append(h_odd)
+                dct1["X"].append(d_odd)
+                dct1["2"].append(a_odd)
+                dct1["Time"].append(str(rm1[0] - 2))
+                dct1["Date"].append(str(date.today()))  # format (year-month-date)
+            except IndexError:
+                if len(ind) < 2:
+                    take_1x2()
+                    time.sleep(0.5)
+            ind.clear()
+    
+    ind1 = []
+    def take_gg():
+        # Get GG/NG odds
+        browser.switch_to.window(browser.window_handles[0])
+        browser.implicitly_wait(10)
+        try:
+            ele1 = browser.find_element(By.XPATH, ggng_xpath)
+            helium.click(ele1)
+            time.sleep(1.8)
+        except:
+            pass
+        page1 = browser.page_source
+        soup = BeautifulSoup(page1, 'lxml')
+        try: # Look for if the matches are there (GG) page
+            WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'event-t'))).text
+        except TimeoutException:
+            pass
+    #         while is_internet_available() is True:
+    #             stats_capture()
+    #             if len(df_stats) < 2:
+    #                 time.sleep(5)
+    #                 continue
+    #             else:
+    #                 return df_stats
+
+        ggs = soup.findAll("div", {"class": "d-1"})
+
+        for gg in ggs:
+            gg = gg.text
+            gg = gg.replace("Yes ", "")
+            gg = gg.replace("No ", "")
+            ggyes = gg[:-4]
+            ggno = gg[-4:]
+            
+            try:
+                dct1["GG"].append(ggyes)
+                dct1["NG"].append(ggno)
+            except IndexError:
+                if len(ind1) < 2:
+                    take_gg()
+                    time.sleep(0.5)
+            ind1.clear()
+            
+    ind2 = []
+    def take_uo15():
+        # Get over and under 1.5 odds
+        browser.implicitly_wait(10)
+        ele2 = browser.find_element(By.XPATH, uo15_xpath)
+        helium.click(ele2)
+        time.sleep(1.8)
+        page2 = browser.page_source
+        soup = BeautifulSoup(page2, 'lxml')
+
+        try: # Look for if the matches are there (U/O) page
+            WebDriverWait(browser, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'event-t'))).text
+
+        except TimeoutException:
+            while is_internet_available() is True:
+                if len(dct1['OV1.5']) < 2:
+                    take_uo15()
+                    time.sleep(5)
+                    continue
+                else:
+                    wheel()
+
+
+        ovun = soup.findAll("div", {"class": "d-1"})
+
+        for tt in ovun:
+            tt = tt.text
+            tt = tt.replace("Under ", "")
+            tt = tt.replace("Over ", "")
+            ov = tt[-4:]
+            un = tt[:-4]
+            
+            try:
+                dct1["OV1.5"].append(ov)
+                dct1["UN1.5"].append(un)
+            except IndexError:
+                if len(ind2) < 2:
+                    take_gg()
+                    time.sleep(0.5)
+            ind2.clear()
+    
+    
+    
+    def take_standing():
+
+        browser.switch_to.window(browser.window_handles[2])
+        time.sleep(1.2)
+        browser.implicitly_wait(10)
+        browser.find_element(By.XPATH, standings_xpath).click()
+
+
+        try:
+            WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.CLASS_NAME, 'l-league-table-standings'))).text
+
+        except TimeoutException:
+            while is_internet_available() is True:
+                if len(dct1['H points']) < 2:
+                    take_standing()
+                    time.sleep(5)
+                    continue
+                else:
+                    wheel()
+
+        time.sleep(1.2)
+        standings = pd.read_html(browser.page_source)
+        stds = standings[0]
+
+        # this is to ensure that all the standings are loaded before continuing
+        b = []
+        while len(stds) < 20 and len(b) <= 26:
+            browser.find_element(By.XPATH, standings_xpath).click()
+            time.sleep(2)
+            standings = pd.read_html(browser.page_source)
+            stds = standings[0]
+            b.append('j')
+
+        if len(b) > 15: # if after trying to load all standings fails 
+            return []
+        b.clear()
+
+        for one_hteam in home_teams:
+            fd = stds[stds['Team'] == one_hteam].index
+            pstn = int(fd[0]) + 1
+            dct1["H standing"].append(pstn)
+
+            points = stds.at[int(fd[0]), 'Pts']
+            dct1["H points"].append(points)
+
+            form = stds.at[int(fd[0]), 'Form']
+            won, draw, lost = form.count('W'), form.count('D'), form.count('L')
+            form_points = (won * 3) + (draw * 1) + (lost * -3)
+            dct1["H Form points"].append(form_points)
+            dct1["H W"].append(won)
+            dct1["H D"].append(draw)
+            dct1["H L"].append(lost)
+
+        for one_ateam in away_teams:
+            fd1 = stds[stds['Team'] == one_ateam].index
+            pstn1 = int(fd1[0]) + 1
+            dct1["A standing"].append(pstn1)
+
+            points1 = stds.at[int(fd1[0]), 'Pts']
+            dct1["A points"].append(points1)
+
+            form = stds.at[int(fd1[0]), 'Form']
+
+            won1, draw1, lost1 = form.count('W'), form.count('D'), form.count('L')
+            form_points = (won1 * 3) + (draw1 * 1) + (lost1 * -3)
+            dct1["A Form points"].append(form_points)
+            dct1["A W"].append(won1)
+            dct1["A D"].append(draw1)
+            dct1["A L"].append(lost1)
+    
+    #cccccccccccccccc
+    # Call the other function if the other preceeding one was sucessful
+    if len(dct1['1']) == 0 and len(tk1) < 3:
+        take_1x2()
+        time.sleep(0.5)
+    else:
+        tk1.clear()
+        wheel()
+    
+    if len(dct1['1']) == 10 and len(tk2) < 3:
+        take_gg()
+        time.sleep(0.5)
+    else:
+        tk2.clear()
+        wheel()
+        
+    if len(dct1['GG']) == 10 and len(tk3) < 3:   
+        take_uo15()
+        time.sleep(0.5)
+    else:
+        tk3.clear()
+        wheel()
+        
+    if len(dct1['OV1.5']) == 10 and len(tk4) < 3:
+        take_standing()
+        time.sleep(0.5)
+    else:
+        tk4.clear()
+        wheel()
+    #ccccccccccccccccc
+    
+            
+        
+    c = []
+    for i in list(dct1):
+        if len(dct1[i]) < 10: 
+            stats_capture()
+            c.append("judy")
+            time.sleep(1.2)
+            if len(c) < 3:
+                continue
+            else:
+                break
+                
+    if len(c) == 0:
+        df_stats = pd.DataFrame.from_dict(dct1)
+    else:
+        return []
+    
+    tk1.clear()
+    tk2.clear()
+    tk3.clear()
+    tk4.clear()
+    c.clear()
+    return df_stats
+
+mx = []
+def results_capture(df_stats1):
+    global result_m
+    # Results pd.Dataframe is here
+    browser.switch_to.window(browser.window_handles[1])
+    df_ff = pd.DataFrame(columns=['Home team', 'Scores', 'Away team', 'Week', 'Season', 'Time'])
+    browser.implicitly_wait(10)
+    browser.find_element(By.XPATH, results_xpath).click()
+    time.sleep(1.8)
+    try:
+        WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.XPATH, '//*[@id="body"]/div/div[1]/div/div[2]/div[1]/div[1]/ul[2]/li[2]/button'))).text
+    except TimeoutException:
+        while is_internet_available() is True:
+            print("Results not available")
+            if len(df_ff) < 2 and len(aa11) > 1:
+                results_capture()
+                time.sleep(5)
+                continue
+            else:
+                wheel()
+        
+    for g in pd.read_html(browser.page_source):
+        dct = {"Home team": [], "Scores": [], "Away team": [], "Week": [], "Season": [], "Time": []}
+
+        t = g[0][0]
+        if '-' not in t :
+            break
+        t = t.split("-")
+        week = ''
+        for wk in t[0]:
+            if wk.isdigit() :
+                week += wk
+        t = t[1].strip()
+        season = int(t[1:6])
+        end_time = t.replace(t[:6], "").strip()
+
+        if 'pm' in end_time:
+            end_time1 = end_time.split(":")
+
+            if end_time1[0] == '12':
+                hrs = str(int(end_time1[0]))
+            else:
+                hrs = str(int(end_time1[0]) + 12)
+            mnts = end_time1[1].replace("pm", "")
+            end_time2 = int(hrs + mnts)
+        else:
+            end_time1 = end_time.replace(":", "")
+            end_time2 = end_time1.replace("am", "").strip()
+            # print(end_time2)
+
+        # Remove the heading part. Really gave me a hard time figuring it out
+        g = g.drop(g.index[0])
+
+        for hm in g[0]:
+            # print("Hm",len(hm))
+            # hm_lst.append(hm)
+            dct["Home team"].append(hm)
+
+        for scr in g[1]:
+            # print("Scr",len(scr))
+            # hm_lst.append(hm)
+            dct["Scores"].append(scr)
+
+        for awy in g[2]:
+            # hm_lst.append(hm)
+            # print("awy",len(awy))
+            dct["Away team"].append(awy)
+            dct["Week"].append(week)
+            dct["Season"].append(season)
+            dct["Time"].append(str(end_time2))
+        df_mt = pd.DataFrame.from_dict(dct)
+        df_ff = df_ff.append(df_mt, ignore_index=True)
+        df_sorted = df_ff[:10].sort_values(by='Home team',ignore_index=True)
+
+    #------------------------------------------------------- 
+    # df_stats1 = df_stats1.sort_values('Home team')
+    df_sorted = df_sorted.drop(['Home team', 'Time'], axis=1)
+    df_sorted = df_sorted.reset_index(drop=True)
+    time.sleep(2)
+    browser.implicitly_wait(10)
+    # Checking if the away team in the stats is same as away team 
+    # in the results. Should be same because we are sorting the two df
+    aa11 = []
+    for a_stats, a_rslt in zip(df_sorted['Away team'] ,df_stats1['Away team']):
+        # print(a_stats," ",a_rslt)
+        if a_stats == a_rslt:
+            #print("Okay")
+            aa11.append(1)
+        else:
+            aa11.append(0)
+    
+    
+    if 0 in aa11 and len(mx) < 4:
+        mx.append('AW')
+        results_capture(df_stats1)
+            
+    mx.clear()
+    # Here sort the two df and then concat better model
+    result_m = pd.concat([df_stats1, df_sorted], axis=1)
+    
+    if result_m['Scores'].isnull().any() and result_m['Week'].isnull().any():
+        print("Results not found \n Trying again...")
+        time.sleep(1.8)
+        results_capture(df_stats1)
+    else:
+        browser.switch_to.window(browser.window_handles[0])
+    browser.switch_to.window(browser.window_handles[0])
+    pd.set_option('display.max_columns', None)
+    return result_m
+
+
+def is_internet_available():
+    net = False
+    print("Checking Internet")
+    try:
+        # connect to the host -- tells us if the host is actually
+        # reachable
+        socket.create_connection(("1.1.1.1", 53))  # Checking for internet conn
+        net = True
+    except OSError:
+        pass
+    return net
+
+def combine_data():
+    browser.switch_to.window(browser.window_handles[0])
+    result = pd.merge(df_stats, df_ff, on=["Time", "Home team"], how="left")
+    pd.set_option('display.max_columns', None)
+    return result
+
+
+def save_to_excel(result):
+    workbook_obj = openpyxl.load_workbook("odidata.xlsx")
+    sheet_obj = workbook_obj.active
+    for mtc in range(len(result)):
+        sheet_obj.append(list(result.iloc[mtc]))
+    workbook_obj.save("odidata.xlsx")
+
+# Google sheets part ------------------------------------    
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SERVICE_ACCOUNT_FILE = 'keys.json'
+
+creds = None
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+SPREADSHEET_ID = '14hQy0ITKmiMeZ_Env8d3oksy8SQ4W0HDGZolBYP6qvI'
+
+service = build('sheets', 'v4', credentials = creds)
+def write_to_sheets(pd_list, retry_count):    
+    # Call the sheets API
+    sheet = service.spreadsheets()
+    try:
+        save_result = sheet.values().append(spreadsheetId = SPREADSHEET_ID,
+                                  valueInputOption="RAW", range= 'Sheet1',
+                                   body =  {'values':pd_list}).execute()
+    except:
+        if retry_count == 6:
+            print("Unable to Save")
+        else:
+            time.sleep(1.2)
+            write_to_sheets(pd_list, retry_count +1)
+    print("Saved")
+        
+
+# -----------------------------------------------------------------------
+
+
+browser.switch_to.window(browser.window_handles[0])
+browser.implicitly_wait(10)
+r11 = browser.find_element_by_class_name("lr").text
+print(r11)
+while "LIVE" in r11 or "END" in r11:
+    browser.implicitly_wait(10)
+    try:
+        print("Live Matchday")
+        r11 = browser.find_element_by_class_name("lr").text
+    except:
+        pass
+    time.sleep(1)
+
+r12 = 0
+while r12 < 200:
+    browser.implicitly_wait(10)
+    r111 = browser.find_element_by_class_name("lr").text
+    if ":" in r111:
+        print("Countdown ...", r111)
+        r12 = r111.split(":")
+        r12 = int(str(r12[0]) + str(r12[1]))
+        if r12 > 25:
+            break
+    time.sleep(1)
+
+# This is the logical control loop for the scripts
+a = []
+fresh = []
+li = []
+
+def wheel():
+    while True:
+        browser.switch_to.window(browser.window_handles[0])
+
+        try:
+            browser.implicitly_wait(10)
+            r1 = browser.find_element_by_class_name("lr").text
+        except:
+            browser.refresh()
+            time.sleep(1)
+            continue
+        if ":" in r1 and len(a) < 1:
+            print("Counting")
+            time.sleep(2)
+            df_stats = stats_capture()
+            a.append('p')
+
+            # When the program does not capture any stats, 
+            # it returns an empty list len == 0 hence this section to help repeat the process
+            if type(df_stats) is list or len(df_stats) == 0: 
+                browser.switch_to.window(browser.window_handles[0])
+                browser.refresh()
+                time.sleep(3)
+                a.clear()
+                continue
+            else:
+                final_stats = df_stats.sort_values(by='Home team', ignore_index=True)
+                final_stats = final_stats.reset_index(drop=True)
+
+
+        if "LIVE" in r1 and len(li) <1:
+            print("Live")
+            li.append("jwm")
+
+        time.sleep(2)
+        try:
+            if "END" in r1 and len(df_stats) == 10 and len(a) >= 1:
+                print("ENDED")
+                time.sleep(5)
+                global df_ff_merged
+                df_ff_merged = results_capture(final_stats)
+                # time.sleep(2)
+                # result = combine_data()
+                time.sleep(2)
+                pd_list = []
+                df_ff_merged = df_ff_merged.astype(str)
+                for mtc in range(len(df_ff_merged)):
+                    pd_list.append(list(df_ff_merged.iloc[mtc]))
+                # save_to_excel(result)
+                write_to_sheets(pd_list, 0)
+                a.clear()
+                li.clear()
+                time.sleep(2)
+                fresh.append('jp')
+            if len(fresh) > 12:
+                browser.refresh()
+                fresh.clear()
+        except:
+            browser.refresh()
+        time.sleep(1)
+wheel()
